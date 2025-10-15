@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import numpy as np
 from fastembed import TextEmbedding
 
@@ -10,6 +11,7 @@ if HF_TOKEN:
     embed_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2", use_auth_token=HF_TOKEN)
 else:
     embed_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
 corpus = []
 corpus_embeddings = None
 
@@ -21,7 +23,7 @@ def simple_sentence_split(text):
 
 
 def extract_text_from_txt(filepath):
-    """Extract plain text from .txt files (fallback source)."""
+    """Extract plain text from .txt files."""
     try:
         with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
             return f.read()
@@ -31,7 +33,7 @@ def extract_text_from_txt(filepath):
 
 
 def load_documents_and_build_index(doc_folder="knowledge_base/docs"):
-    """Load documents from folder, split into chunks, and build vector index."""
+    """Load documents, embed them, and save the index persistently."""
     global corpus, corpus_embeddings
 
     if not os.path.exists(doc_folder):
@@ -56,7 +58,30 @@ def load_documents_and_build_index(doc_folder="knowledge_base/docs"):
     corpus = simple_sentence_split(all_text)
     corpus_embeddings = np.array(list(embed_model.embed(corpus))).astype("float32")
 
-    print(f"Loaded {len(corpus)} text chunks into memory index.")
+    os.makedirs("knowledge_base/index", exist_ok=True)
+    np.save("knowledge_base/index/corpus_embeddings.npy", corpus_embeddings)
+    with open("knowledge_base/index/corpus.json", "w", encoding="utf-8") as f:
+        json.dump(corpus, f)
+
+    print(f"✅ Loaded and saved {len(corpus)} text chunks into memory index.")
+
+
+def load_index():
+    """Load prebuilt index from disk if available."""
+    global corpus, corpus_embeddings
+    try:
+        emb_path = "knowledge_base/index/corpus_embeddings.npy"
+        corpus_path = "knowledge_base/index/corpus.json"
+
+        if os.path.exists(emb_path) and os.path.exists(corpus_path):
+            corpus_embeddings = np.load(emb_path)
+            with open(corpus_path, "r", encoding="utf-8") as f:
+                corpus = json.load(f)
+            print(f"✅ Loaded index with {len(corpus)} chunks from disk.")
+        else:
+            print("⚠️ No saved index found; you need to upload documents first.")
+    except Exception as e:
+        print(f"Error loading index: {e}")
 
 
 def cosine_similarity(a, b):
@@ -70,6 +95,7 @@ def retrieve_relevant_chunks(query, top_k=5):
     """Return top_k most similar text chunks."""
     global corpus, corpus_embeddings
     if corpus_embeddings is None or len(corpus) == 0:
+        print("⚠️ No index loaded; returning empty context.")
         return []
 
     query_vec = np.array(list(embed_model.embed([query]))).astype("float32")
@@ -79,7 +105,16 @@ def retrieve_relevant_chunks(query, top_k=5):
 
 
 def clear_index():
-    """Reset index and corpus."""
+    """Reset index and delete stored embeddings."""
     global corpus, corpus_embeddings
     corpus = []
     corpus_embeddings = None
+
+    try:
+        folder = "knowledge_base/index"
+        if os.path.exists(folder):
+            for f in os.listdir(folder):
+                os.remove(os.path.join(folder, f))
+        print("🧹 Cleared index files.")
+    except Exception as e:
+        print(f"Error clearing index: {e}")
