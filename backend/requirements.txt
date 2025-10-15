@@ -8,5 +8,4 @@ requests
 huggingface_hub
 pymupdf
 python-dotenv
-openai
 pandas
