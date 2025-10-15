@@ -42,7 +42,7 @@ const uploadLocationsBtn = document.getElementById("uploadLocationsBtn");
 const uploadLocationsMsg = document.getElementById("uploadLocationsMsg");
 
 uploadLocationsBtn.onclick = () => {
-  uploadFiles(locationFilesInput.files, "http://127.0.0.1:5000/admin/upload_locations", uploadLocationsMsg);
+  uploadFiles(locationFilesInput.files, "/admin/upload_locations", uploadLocationsMsg);
 };
 
 // Upload Documents
@@ -51,7 +51,7 @@ const uploadDocsBtn = document.getElementById("uploadDocsBtn");
 const uploadDocsMsg = document.getElementById("uploadDocsMsg");
 
 uploadDocsBtn.onclick = () => {
-  uploadFiles(docFilesInput.files, "http://127.0.0.1:5000/admin/upload_documents", uploadDocsMsg);
+  uploadFiles(docFilesInput.files, "/admin/upload_documents", uploadDocsMsg);
 };
 
 // Reset Locations with confirmation
@@ -60,7 +60,7 @@ resetLocationsBtn.onclick = async () => {
   if (!confirm("Are you sure you want to RESET ALL LOCATIONS? This action cannot be undone.")) return;
 
   try {
-    const res = await fetch("http://127.0.0.1:5000/admin/reset_locations", {
+    const res = await fetch("/admin/reset_locations", {
       method: "POST"
     });
     const data = await res.json();
@@ -78,7 +78,7 @@ resetDocsBtn.onclick = async () => {
   if (!confirm("Are you sure you want to RESET ALL DOCUMENTS? This action cannot be undone.")) return;
 
   try {
-    const res = await fetch("http://127.0.0.1:5000/admin/reset_documents", {
+    const res = await fetch("/admin/reset_documents", {
       method: "POST"
     });
     const data = await res.json();
@@ -94,7 +94,7 @@ resetDocsBtn.onclick = async () => {
 const exportAnalyticsBtn = document.getElementById("exportAnalyticsBtn");
 exportAnalyticsBtn.onclick = async () => {
   try {
-    const res = await fetch("http://127.0.0.1:5000/admin/export_analytics");
+    const res = await fetch("/admin/export_analytics");
     if (!res.ok) throw new Error("Failed to fetch analytics");
 
     const blob = await res.blob();
