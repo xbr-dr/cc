@@ -6,3 +6,5 @@ scikit-learn
 fastembed
 requests
 huggingface_hub
+pymupdfpython-dotenv
+openai
