@@ -6,13 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Campus Chatbot - User</title>
 
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-  <!-- CSS -->
-<link rel="stylesheet" href="{{ url_for('static', filename='user/style.css') }}">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
-
-
+  <link rel="stylesheet" href="{{ url_for('static', filename='user/style.css') }}">
 </head>
 
 <body>
@@ -49,17 +46,8 @@
     </section>
   </main>
 
-  <footer style="text-align: center; padding: 10px; font-size: 0.9rem; background-color: #f8f8f8; margin-top: 10px;">
-    © Department of Information Technology, Sri Pratap College, Srinagar<br>
-    Developers:
-    <a href="https://instagram.com/xbr_dr" target="_blank">Zubair Bini Hamid</a>,
-    <a href="https://instagram.com/yamin_rashid_wani" target="_blank">Yamin Rashid</a>,
-    <a href="https://instagram.com/_suhaib_.wani007" target="_blank">Suhaib Nazir</a>
-  </footer>
-
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- JS -->
   <script src="{{ url_for('static', filename='user/script.js') }}"></script>
 </body>
 
