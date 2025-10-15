@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Campus Chatbot - User</title>
+
+
+  <!-- CSS -->
+<link rel="stylesheet" href="{{ url_for('static', filename='user/style.css') }}">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+
+
+</head>
+
+<body>
+
+  <header>CampusGPT</header>
+
+  <nav>
+    <button id="btnNavigate">Navigate</button>
+    <button id="btnChat" class="active">Chat</button>
+  </nav>
+
+  <main>
+    <section id="navigate">
+      <select id="locationSelect" aria-label="Select location"></select>
+      <div id="locationDetails"></div>
+      <div id="map"></div>
+      <button id="navigateBtn">Navigate with Google Maps</button>
+    </section>
+
+    <section id="chat" class="active">
+      <div id="chatLog"></div>
+      <div id="chatInputArea">
+        <input type="text" id="chatInput" placeholder="Ask me anything about the campus..." />
+        <button id="sendBtn">
+          <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round"
+            stroke-linejoin="round" height="20px" width="20px" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z">
+            </path>
+            <path d="m21.854 2.147-10.94 10.939"></path>
+          </svg>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <footer style="text-align: center; padding: 10px; font-size: 0.9rem; background-color: #f8f8f8; margin-top: 10px;">
+    © Department of Information Technology, Sri Pratap College, Srinagar<br>
+    Developers:
+    <a href="https://instagram.com/xbr_dr" target="_blank">Zubair Bini Hamid</a>,
+    <a href="https://instagram.com/yamin_rashid_wani" target="_blank">Yamin Rashid</a>,
+    <a href="https://instagram.com/_suhaib_.wani007" target="_blank">Suhaib Nazir</a>
+  </footer>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- JS -->
+  <script src="{{ url_for('static', filename='user/script.js') }}"></script>
+</body>
+
+</html>

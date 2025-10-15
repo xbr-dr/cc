@@ -1,0 +1,8 @@
+Flask
+Flask-Cors
+Werkzeug
+numpy
+scikit-learn
+fastembed
+requests
+huggingface_hub

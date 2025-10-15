@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Campus Chatbot - Admin</title>
+
+<!-- Bootstrap CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<!-- CSS -->
+<link rel="stylesheet" href="{{ url_for('static', filename='admin/style.css') }}">
+
+
+</head>
+<body class="bg-light">
+
+<header class="bg-primary text-white text-center py-4 mb-4 shadow">
+  <h1 class="mb-0">CampusGPT Admin Panel</h1>
+</header>
+
+<main class="container">
+
+  <!-- Upload Locations -->
+  <section class="section mb-4" id="uploadLocationsSection">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Upload Locations</h2>
+        <label for="locationFiles" class="form-label">Select CSV / XLS / XLSX files</label>
+        <input type="file" id="locationFiles" class="form-control mb-3" multiple accept=".csv,.xls,.xlsx" />
+        <button id="uploadLocationsBtn" class="btn btn-success">Upload Locations</button>
+        <div id="uploadLocationsMsg" class="responseMsg mt-3 text-success fw-semibold"></div>
+      </div>
+    </div>
+  </section>
+
+<!-- Upload Documents -->
+  <section class="section mb-4" id="uploadDocsSection">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Upload Documents</h2>
+        <label for="docFiles" class="form-label">Select PDF / TXT / DOCX / XLS / XLSX files / CSV</label>
+        <input type="file" id="docFiles" class="form-control mb-3" multiple accept=".pdf,.txt,.docx,.xls,.xlsx,.csv" />
+        <button id="uploadDocsBtn" class="btn btn-success">Upload Documents</button>
+        <div id="uploadDocsMsg" class="responseMsg mt-3 text-success fw-semibold"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Reset Location base -->
+  <section class="section mb-4" id="resetLocationsSection">
+    <div class="card shadow-sm border-danger">
+      <div class="card-body">
+        <h2 class="h5 mb-3 text-danger">Reset Location Base</h2>
+        <button id="resetLocationsBtn" class="btn btn-danger">Reset Locations</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Reset Document base -->
+  <section class="section mb-4" id="resetDocsSection">
+    <div class="card shadow-sm border-danger">
+      <div class="card-body">
+        <h2 class="h5 mb-3 text-danger">Reset Document Base</h2>
+        <button id="resetDocsBtn" class="btn btn-danger">Reset Documents</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Export Analytics -->
+  <section class="section mb-5" id="exportAnalyticsSection">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Export User Session Analytics</h2>
+        <button id="exportAnalyticsBtn" class="btn btn-primary">Download Analytics CSV</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- JS -->
+<script src="{{ url_for('static', filename='admin/script.js') }}"></script>
+</body>
+</html>
