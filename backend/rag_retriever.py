@@ -33,7 +33,6 @@ def extract_text_from_txt(filepath):
 
 
 def load_documents_and_build_index(doc_folder="knowledge_base/docs"):
-    """Load documents, embed them, and save the index persistently."""
     global corpus, corpus_embeddings
 
     if not os.path.exists(doc_folder):
@@ -51,12 +50,15 @@ def load_documents_and_build_index(doc_folder="knowledge_base/docs"):
             print(f"Skipping unsupported file type: {filename}")
 
     if not all_text.strip():
-        print("No text extracted from documents.")
+        print("⚠️ No text extracted from documents.")
         corpus, corpus_embeddings = [], None
         return
 
     corpus = simple_sentence_split(all_text)
     corpus_embeddings = np.array(list(embed_model.embed(corpus))).astype("float32")
+
+    print(f"✅ Loaded {len(corpus)} text chunks into memory index.")
+    print(f"🧠 First chunk sample:\n{corpus[0][:200]}...")
 
     os.makedirs("knowledge_base/index", exist_ok=True)
     np.save("knowledge_base/index/corpus_embeddings.npy", corpus_embeddings)
