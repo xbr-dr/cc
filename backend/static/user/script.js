@@ -33,7 +33,7 @@ let baseLayers, returnButtonControl;
 // Fetch locations from backend
 async function loadLocations() {
   try {
-    const res = await fetch("http://127.0.0.1:5000/user/locations");
+    const res = await fetch("/user/locations");
     locations = await res.json();
 
     // Sort alphabetically by name (case-insensitive)
