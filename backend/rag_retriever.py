@@ -2,9 +2,12 @@ import os
 import re
 import json
 import numpy as np
+import pandas as pd
 from fastembed import TextEmbedding
 
-HF_TOKEN = os.getenv("HF_TOKEN")  # Render environment variable
+import fitz  # PyMuPDF for PDF parsing
+
+HF_TOKEN = os.getenv("HF_TOKEN")  # Hugging Face auth (optional)
 
 # Initialize lightweight embedding model
 if HF_TOKEN:
@@ -17,7 +20,7 @@ corpus_embeddings = None
 
 
 def simple_sentence_split(text):
-    """Lightweight sentence splitter using regex (no nltk)."""
+    """Lightweight sentence splitter using regex."""
     sentences = re.split(r'(?<=[.!?])\s+', text)
     return [s.strip() for s in sentences if len(s.strip()) > 20]
 
@@ -32,22 +35,59 @@ def extract_text_from_txt(filepath):
         return ""
 
 
+def extract_text_from_pdf(filepath):
+    """Extract text from PDF using PyMuPDF."""
+    text = ""
+    try:
+        with fitz.open(filepath) as pdf:
+            for page in pdf:
+                text += page.get_text("text") + "\n"
+    except Exception as e:
+        print(f"Error reading PDF {filepath}: {e}")
+    return text
+
+
+def extract_text_from_csv(filepath):
+    """Extract readable text from CSV — combine headers and rows."""
+    try:
+        df = pd.read_csv(filepath)
+        text = df.to_string(index=False)
+        return text
+    except Exception as e:
+        print(f"Error reading CSV {filepath}: {e}")
+        return ""
+
+
+def extract_text(filepath):
+    """General extractor that handles multiple file types."""
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext == ".txt":
+        return extract_text_from_txt(filepath)
+    elif ext == ".pdf":
+        return extract_text_from_pdf(filepath)
+    elif ext == ".csv":
+        return extract_text_from_csv(filepath)
+    else:
+        print(f"⚠️ Unsupported file type: {filepath}")
+        return ""
+
+
 def load_documents_and_build_index(doc_folder="knowledge_base/docs"):
+    """Load docs, extract text, embed, and save index."""
     global corpus, corpus_embeddings
 
     if not os.path.exists(doc_folder):
-        print(f"Document folder '{doc_folder}' does not exist. Skipping index build.")
+        print(f"⚠️ Folder '{doc_folder}' does not exist.")
         corpus, corpus_embeddings = [], None
         return
 
     all_text = ""
     for filename in os.listdir(doc_folder):
         filepath = os.path.join(doc_folder, filename)
-        if filename.lower().endswith(".txt"):
-            text = extract_text_from_txt(filepath)
+        print(f"📄 Processing: {filename}")
+        text = extract_text(filepath)
+        if text.strip():
             all_text += text + "\n"
-        else:
-            print(f"Skipping unsupported file type: {filename}")
 
     if not all_text.strip():
         print("⚠️ No text extracted from documents.")
@@ -57,19 +97,16 @@ def load_documents_and_build_index(doc_folder="knowledge_base/docs"):
     corpus = simple_sentence_split(all_text)
     corpus_embeddings = np.array(list(embed_model.embed(corpus))).astype("float32")
 
-    print(f"✅ Loaded {len(corpus)} text chunks into memory index.")
-    print(f"🧠 First chunk sample:\n{corpus[0][:200]}...")
-
     os.makedirs("knowledge_base/index", exist_ok=True)
     np.save("knowledge_base/index/corpus_embeddings.npy", corpus_embeddings)
     with open("knowledge_base/index/corpus.json", "w", encoding="utf-8") as f:
         json.dump(corpus, f)
 
-    print(f"✅ Loaded and saved {len(corpus)} text chunks into memory index.")
+    print(f"✅ Built index with {len(corpus)} chunks.")
 
 
 def load_index():
-    """Load prebuilt index from disk if available."""
+    """Load saved index if available."""
     global corpus, corpus_embeddings
     try:
         emb_path = "knowledge_base/index/corpus_embeddings.npy"
@@ -79,9 +116,9 @@ def load_index():
             corpus_embeddings = np.load(emb_path)
             with open(corpus_path, "r", encoding="utf-8") as f:
                 corpus = json.load(f)
-            print(f"✅ Loaded index with {len(corpus)} chunks from disk.")
+            print(f"✅ Loaded {len(corpus)} chunks from saved index.")
         else:
-            print("⚠️ No saved index found; you need to upload documents first.")
+            print("⚠️ No saved index found — upload documents first.")
     except Exception as e:
         print(f"Error loading index: {e}")
 
@@ -94,7 +131,7 @@ def cosine_similarity(a, b):
 
 
 def retrieve_relevant_chunks(query, top_k=5):
-    """Return top_k most similar text chunks."""
+    """Return top_k most relevant text chunks."""
     global corpus, corpus_embeddings
     if corpus_embeddings is None or len(corpus) == 0:
         print("⚠️ No index loaded; returning empty context.")
@@ -107,16 +144,15 @@ def retrieve_relevant_chunks(query, top_k=5):
 
 
 def clear_index():
-    """Reset index and delete stored embeddings."""
+    """Clear all embeddings and cached data."""
     global corpus, corpus_embeddings
     corpus = []
     corpus_embeddings = None
-
     try:
         folder = "knowledge_base/index"
         if os.path.exists(folder):
             for f in os.listdir(folder):
                 os.remove(os.path.join(folder, f))
-        print("🧹 Cleared index files.")
+        print("🧹 Cleared index.")
     except Exception as e:
         print(f"Error clearing index: {e}")
