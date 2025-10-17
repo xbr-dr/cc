@@ -1,207 +1,310 @@
-"""
-Lightweight RAG Generator Module
---------------------------------
-Uses Hugging Face Inference API (auto provider) with Llama-3.2-1B-Instruct.
-Fully serverless, no local model required.
-"""
-
+# rag_retriever.py
 import os
 import re
-from rag_retriever import retrieve_relevant_chunks
+import json
+import numpy as np
+import pandas as pd
+from fastembed import TextEmbedding
+import fitz  # PyMuPDF for PDF parsing
 
-try:
-    from huggingface_hub import InferenceClient
-except ImportError:
-    raise ImportError("Please install huggingface_hub: pip install huggingface_hub")
+# -----------------------------
+# Initialization
+# -----------------------------
+HF_TOKEN = os.getenv("HF_TOKEN")  # Hugging Face auth (optional)
 
-# === CONFIGURATION ===
-HF_TOKEN = os.getenv("HF_TOKEN")
-MODEL_NAME = "meta-llama/Llama-3.2-1B-Instruct"
+if HF_TOKEN:
+    embed_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2", use_auth_token=HF_TOKEN)
+else:
+    embed_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-# Initialize InferenceClient with auto provider
-client = InferenceClient(
-    provider="auto",
-    api_key=HF_TOKEN,
-)
+corpus = []
+corpus_metadata = []
+corpus_embeddings = None
 
+# -----------------------------
+# Utility regexes & constants
+# -----------------------------
+EMAIL_RE = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
+PHONE_RE = re.compile(r'(?:\+?\d{1,3}[-.\s]?)?(?:\(\d{2,4}\)|\d{2,4})[-.\s]?\d{5,12}')
+LABEL_RE = re.compile(r'^(?:full name|name|department|position|qualification|email|mobile|mobile number|area of specialization)\s*[:\-]', re.I)
+BULLET_RE = re.compile(r'^[\u2022\-\*\•\d\)\.]+\s+', re.M)
+HEADING_RE = re.compile(r'^(?:#{1,6}\s*|[A-Z][A-Z\s]{3,}\s*$|[A-Z][a-z]+\s*[-]{2,}|^[A-Z][\w\s]{10,}$)', re.M)
+MIN_CHUNK_CHARS = 60
+MAX_CHUNK_CHARS = 1200
 
-def generate_answer(history):
-    """Generates a strictly grounded answer from chat history using serverless Llama-3.2-1B-Instruct.
-    - Maintains conversation context from history.
-    - Deterministic model settings (temperature=0.2).
-    - If no retrieved context or heuristic shows no support, politely refuse.
-    - Never hallucinate or invent facts. Do NOT output sources.
-    """
-    if not history or not isinstance(history, list):
-        return "Invalid chat history."
-
-    # Latest user message
-    user_message = history[-1]["content"] if history[-1]["role"] == "user" else ""
-    if not user_message.strip():
-        return "Please ask a valid question."
-
-    # Build enhanced query for better retrieval
-    query_for_retrieval = user_message
-    
-    # Extract context from previous messages for pronoun resolution
-    if len(history) >= 2:
-        # Check if query contains pronouns or is very short (likely a follow-up)
-        is_followup = len(user_message.split()) <= 8 and any(
-            word in user_message.lower() 
-            for word in ["his", "her", "their", "email", "contact", "phone", "number", "address", "it", "that", "ph"]
-        )
-        
-        if is_followup:
-            # Look back through recent history for the MOST RECENT person mentioned
-            for i in range(len(history) - 2, max(len(history) - 8, -1), -1):
-                msg_content = history[i]["content"]
-                # Extract names (Dr. Name patterns) - get the most recent
-                names = re.findall(r'Dr\.\s+[\w\s]+?(?:\s+(?:Bandh|Zargar|Dar|Shah|Ahmad|Khan|Bhat))', msg_content)
-                if names:
-                    # Use first name found and add contact keywords for better retrieval
-                    query_for_retrieval = f"{names[0].strip()} contact email phone"
-                    break
-
-    # Detect if query is about contact information and increase retrieval
-    is_contact_query = any(
-        word in user_message.lower() 
-        for word in ["email", "contact", "phone", "mobile", "number", "address", "reach", "call", "ph"]
-    )
-    
-    # Higher top_k for contact queries to ensure we get the right chunk
-    top_k_value = 12 if is_contact_query else 5
-
-    # Retrieve relevant knowledge chunks
-    relevant_docs = retrieve_relevant_chunks(query_for_retrieval, top_k=top_k_value)
-    context_text = "\n\n".join([doc["text"] for doc in relevant_docs]) if relevant_docs else "No context found."
-
-    # System instructions
-    system_instructions = """
-You are CampusGPT, a helpful and friendly assistant for Sri Pratap College, Srinagar. 
-Your knowledge is strictly limited to official information about the college provided in your knowledge base.
-
-Core College Information:  
-- Name: Sri Pratap College  
-- Address: MA Road, Srinagar, 190001  
-- Motto: Ad Aethera Tendens (Reaching for the Stars)
-- Type: Science College  
-- Established: 1905  
-- Founder: Annie Besant  
-- Academic Affiliation: Cluster University of Srinagar  
-- Website: https://spcollege.edu.in/
-
-Developer Information:
-You were developed at the Department of Information Technology, SP College, by Yamin Rashid and Suhaib Nazir under the supervision of Dr. Wasim Akram Zargar.
-
-CRITICAL INSTRUCTIONS FOR RESPONDING:
-
-1. ANSWER ONLY WHAT IS ASKED:
-   - Provide ONLY the specific information requested—nothing more
-   - Do NOT add background context, elaborations, or additional details unless explicitly asked
-   - Keep responses concise and direct
-   - For contact queries (email, phone), provide ONLY that specific contact detail
-   - Examples:
-     * User: "Who is Wasim?" → "Dr. Wasim Akram Zargar supervised the development of CampusGPT at the Department of Information Technology, SP College."
-     * User: "What is his email?" → "vasuwasim786@gmail.com"
-     * User: "His phone number?" → "7006946464"
-
-2. USE ONLY INDEXED CONTEXT - NEVER GUESS:
-   - Answer ONLY from information explicitly provided in the context below
-   - Look carefully through ALL provided context for the requested information
-   - For contact information, the EXACT email or phone must be present in the context
-   - If the exact information is not in the context, clearly state you don't have that information
-   - NEVER infer, extrapolate, or create contact information based on patterns
-   - NEVER mix up people's contact information
-   - Pay special attention to match the RIGHT person with the RIGHT contact details
-
-3. GREETINGS & SMALL TALK (Keep Brief):
-   - Respond warmly to greetings: "Hello! I'm CampusGPT, your assistant for Sri Pratap College. How can I help you?"
-   - For "How are you?": "I'm here and ready to help! What would you like to know about SP College?"
-   - For general small talk (weather, news, dates): "I specialize in SP College information. What can I help you with regarding the college?"
-   - Keep all greetings to 1-2 sentences maximum
-
-4. HANDLING CORRECTIONS & OBJECTIONS:
-   - If corrected (user says "no", "wrong", "that's incorrect", "nope"):
-     * Acknowledge immediately: "I apologize for the error."
-     * Ask for clarification: "Could you please clarify what information you're looking for about SP College?"
-     * Do NOT defend, explain, or repeat the incorrect information
-     * Do NOT give another guess
-   - If the user insists you have information (says "yes you do", "yes please"):
-     * Re-check the provided context very carefully
-     * If found, provide the information directly
-     * If still not found: "I apologize, but I cannot find that specific information in my current database. Please visit https://spcollege.edu.in/ or contact the department directly."
-
-5. OUT-OF-SCOPE QUERIES (Handle Firmly but Politely):
-   - For non-college topics: "I only provide information about Sri Pratap College. How can I assist you with the college?"
-   - For personal questions about you: "I'm an AI assistant focused on SP College information. What would you like to know about the college?"
-   - For current events/dates/weather: "I don't have access to current date/time or external information. I can help with SP College details though!"
-
-6. WHEN INFORMATION IS UNAVAILABLE:
-   - Be direct: "I don't have that information in my database."
-   - Provide alternatives: "You can find this at https://spcollege.edu.in/ or contact the relevant department directly."
-   - NEVER make up or guess information
-   - NEVER create email addresses or phone numbers
-   - NEVER mention people not in the provided context
-
-7. CONVERSATION STYLE:
-   - Professional yet friendly
-   - Concise and to-the-point
-   - Use conversation history to understand context and references (like "his", "her")
-   - Track who is being discussed carefully
-   - No jargon unless it appears in your indexed data
-   - Maximum 2-3 sentences per response unless the query requires more detail
-   - For contact information, provide just the detail requested (email or phone number alone)
-
-8. FORBIDDEN BEHAVIORS:
-   - Do NOT provide lengthy explanations or background information unless asked
-   - Do NOT add disclaimers like "It's worth noting" or "As per available information"
-   - Do NOT use phrases like "Here's what I know" or "Let me tell you more"
-   - Do NOT defend or justify your responses when corrected
-   - Do NOT speculate or infer information not in your knowledge base
-   - Do NOT mention names or people not present in the provided context
-   - Do NOT repeat yourself if you've already answered the same question earlier
-   - Do NOT mix up people's contact information
-   - Do NOT create or guess email addresses based on name patterns
-
-SCOPE OF ASSISTANCE (ONLY answer queries about):
-- Campus facilities and infrastructure
-- Departments and courses offered
-- Faculty and staff (only if in your database)
-- Admission procedures
-- Contact information (email, phone numbers)
-- College history and basic facts
-- Events and activities (if in your database)
-- Student services
-- Official college policies (if in your database)
-
-Remember: Be helpful, accurate, and brief. Answer only what is asked using only what you know from the provided context. Use conversation history to understand pronouns and references. NEVER create or guess contact information.
-"""
-
-    # Build messages payload with conversation history
-    messages = [
-        {"role": "system", "content": system_instructions.strip()},
-        {"role": "system", "content": f"Relevant context from documents:\n{context_text}"}
-    ]
-    
-    # Add conversation history (limit to last 8 messages for better context tracking)
-    history_to_include = history[-8:] if len(history) > 8 else history
-    messages.extend(history_to_include)
-
+# -----------------------------
+# Text extraction
+# -----------------------------
+def extract_text_from_txt(filepath):
     try:
-        # Serverless auto call
-        completion = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=messages,
-            temperature=0.2,  # Lower temperature to reduce hallucination
-            max_tokens=512
-        )
-
-        assistant_reply = completion.choices[0].message["content"]
-
-        # Clean output
-        assistant_reply = re.sub(r"<think>.*?</think>", "", assistant_reply, flags=re.DOTALL).strip()
-
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            return [(1, f.read())]
     except Exception as e:
-        assistant_reply = f"Error generating answer: {e}"
+        print(f"Error reading {filepath}: {e}")
+        return []
 
-    return assistant_reply
+def extract_text_from_pdf(filepath):
+    pages = []
+    try:
+        with fitz.open(filepath) as pdf:
+            for i, page in enumerate(pdf):
+                pages.append((i + 1, page.get_text("text")))
+    except Exception as e:
+        print(f"Error reading PDF {filepath}: {e}")
+    return pages
+
+def extract_text_from_csv(filepath):
+    pages = []
+    try:
+        df = pd.read_csv(filepath, dtype=str, keep_default_na=False)
+        for idx, row in df.iterrows():
+            parts = [f"{col}: {str(row[col]).strip()}" for col in df.columns if str(row[col]).strip()]
+            text = " | ".join(parts)
+            if text.strip():
+                pages.append((idx + 1, text))
+    except Exception as e:
+        print(f"Error reading CSV {filepath}: {e}")
+    return pages
+
+def extract_text(filepath):
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext == ".pdf":
+        return extract_text_from_pdf(filepath)
+    elif ext == ".txt":
+        return extract_text_from_txt(filepath)
+    elif ext == ".csv":
+        return extract_text_from_csv(filepath)
+    else:
+        print(f"⚠️ Unsupported file type: {filepath}")
+        return []
+
+# -----------------------------
+# Smart Dynamic Chunking
+# -----------------------------
+def normalize_whitespace(s):
+    return re.sub(r'\s+', ' ', s).strip()
+
+def split_paragraphs(text):
+    parts = re.split(r'\n\s*\n+', text)
+    return [p.strip() for p in parts if len(p.strip()) > 30]
+
+def split_structured_records(text):
+    if "faculty member" in text.lower():
+        parts = re.split(r'faculty member\s*\d*\s*', text, flags=re.I)
+        return [p.strip() for p in parts if len(p.strip()) > MIN_CHUNK_CHARS]
+    if text.lower().count("full name") >= 2:
+        parts = re.split(r'(?i)(?:\n|^)\s*full name\s*[:\-]\s*', text)
+        if parts and len(parts[0].strip()) < 20:
+            parts = parts[1:]
+        cleaned = []
+        for p in parts:
+            if len(p.strip()) >= MIN_CHUNK_CHARS:
+                cleaned.append("Full Name: " + p.strip())
+        return cleaned
+    return []
+
+def split_bulleted_lists(text):
+    lines = text.splitlines()
+    out, buf = [], []
+    for l in lines:
+        if BULLET_RE.match(l):
+            buf.append(BULLET_RE.sub("", l).strip())
+        else:
+            if buf:
+                out.append(" ".join(buf))
+                buf = []
+            out.append(l)
+    if buf:
+        out.append(" ".join(buf))
+    return [o.strip() for o in out if len(o.strip()) > 30]
+
+def split_by_headings(text):
+    lines = text.splitlines()
+    chunks, buffer = [], []
+    for line in lines:
+        if HEADING_RE.match(line.strip()) and buffer:
+            chunks.append("\n".join(buffer).strip())
+            buffer = [line]
+        else:
+            buffer.append(line)
+    if buffer:
+        chunks.append("\n".join(buffer).strip())
+
+    out = []
+    for c in chunks:
+        if len(c) > MAX_CHUNK_CHARS:
+            out.extend(split_paragraphs(c))
+        else:
+            out.append(c)
+    return [o for o in out if len(o) > 30]
+
+def fallback_sentence_split(text):
+    sents = re.split(r'(?<=[.!?])\s+', text)
+    sents = [s.strip() for s in sents if s.strip()]
+    chunks, current = [], ""
+    for s in sents:
+        if len(current) + len(s) + 1 <= MAX_CHUNK_CHARS:
+            current = (current + " " + s).strip()
+        else:
+            if len(current) >= MIN_CHUNK_CHARS:
+                chunks.append(current)
+            current = s
+    if current and len(current) >= MIN_CHUNK_CHARS:
+        chunks.append(current)
+    return chunks if chunks else [text.strip()[:MAX_CHUNK_CHARS]]
+
+def smart_chunk_text(text):
+    text = text.strip()
+    if len(text) < MIN_CHUNK_CHARS:
+        return []
+    records = split_structured_records(text)
+    if records:
+        return [normalize_whitespace(r) for r in records]
+    if BULLET_RE.search(text):
+        return [normalize_whitespace(c) for c in split_bulleted_lists(text)]
+    if HEADING_RE.search(text):
+        return [normalize_whitespace(c) for c in split_by_headings(text)]
+    paras = split_paragraphs(text)
+    if len(paras) > 1:
+        chunks = []
+        for p in paras:
+            if len(p) > MAX_CHUNK_CHARS:
+                chunks.extend(fallback_sentence_split(p))
+            else:
+                chunks.append(p)
+        return [normalize_whitespace(c) for c in chunks]
+    return [normalize_whitespace(c) for c in fallback_sentence_split(text)]
+
+# -----------------------------
+# Index building and loading
+# -----------------------------
+def load_documents_and_build_index(doc_folder="knowledge_base/docs"):
+    """Dynamic, general-purpose index builder."""
+    global corpus, corpus_metadata, corpus_embeddings
+
+    if not os.path.exists(doc_folder):
+        print(f"⚠️ Folder '{doc_folder}' does not exist.")
+        corpus, corpus_metadata, corpus_embeddings = [], [], None
+        return
+
+    corpus_data = []
+    for filename in os.listdir(doc_folder):
+        filepath = os.path.join(doc_folder, filename)
+        if not os.path.isfile(filepath):
+            continue
+        print(f"📄 Processing: {filename}")
+        pages = extract_text(filepath)
+        for page_num, text in pages:
+            if not text or len(text.strip()) < 30:
+                continue
+            chunks = smart_chunk_text(text)
+            for i, chunk in enumerate(chunks):
+                meta = {
+                    "source_file": filename,
+                    "page": page_num,
+                    "chunk_id": f"{page_num}_{i}",
+                    "length": len(chunk),
+                    "contains_email": bool(EMAIL_RE.search(chunk)),
+                    "contains_phone": bool(PHONE_RE.search(chunk)),
+                }
+                corpus_data.append({"text": chunk, "meta": meta})
+
+    if not corpus_data:
+        print("⚠️ No text extracted from documents.")
+        corpus, corpus_metadata, corpus_embeddings = [], [], None
+        return
+
+    corpus = [c["text"] for c in corpus_data]
+    corpus_metadata = [c["meta"] for c in corpus_data]
+    embeddings = []
+    batch_size = 64
+    for i in range(0, len(corpus), batch_size):
+        batch = corpus[i:i+batch_size]
+        embeddings.extend(list(embed_model.embed(batch)))
+
+    corpus_embeddings = np.array(embeddings).astype("float32")
+
+    os.makedirs("knowledge_base/index", exist_ok=True)
+    np.save("knowledge_base/index/corpus_embeddings.npy", corpus_embeddings)
+    with open("knowledge_base/index/corpus.json", "w", encoding="utf-8") as f:
+        json.dump(corpus_data, f, ensure_ascii=False, indent=2)
+
+    print(f"✅ Built dynamic index with {len(corpus_data)} chunks.")
+
+def load_index():
+    """Load saved dynamic index if available."""
+    global corpus, corpus_metadata, corpus_embeddings
+    try:
+        emb_path = "knowledge_base/index/corpus_embeddings.npy"
+        corpus_path = "knowledge_base/index/corpus.json"
+        if os.path.exists(emb_path) and os.path.exists(corpus_path):
+            corpus_embeddings = np.load(emb_path)
+            with open(corpus_path, "r", encoding="utf-8") as f:
+                corpus_data = json.load(f)
+            corpus = [c["text"] for c in corpus_data]
+            corpus_metadata = [c["meta"] for c in corpus_data]
+            print(f"✅ Loaded {len(corpus)} chunks from saved index.")
+        else:
+            print("⚠️ No saved index found — upload documents first.")
+    except Exception as e:
+        print(f"Error loading index: {e}")
+
+# -----------------------------
+# Retrieval
+# -----------------------------
+def cosine_similarity(a, b):
+    a_norm = a / np.linalg.norm(a, axis=1, keepdims=True)
+    b_norm = b / np.linalg.norm(b, axis=1, keepdims=True)
+    return np.dot(a_norm, b_norm.T)
+
+def retrieve_relevant_chunks(query, top_k=5):
+    """Retrieve top_k relevant chunks with metadata-aware boosting."""
+    global corpus, corpus_metadata, corpus_embeddings
+    if corpus_embeddings is None or len(corpus) == 0:
+        print("⚠️ No index loaded; returning empty context.")
+        return []
+
+    # Preprocess query for better matching
+    query_lower = query.lower()
+    
+    # Detect if this is a contact information query
+    is_contact_query = any(word in query_lower for word in 
+                          ["email", "contact", "phone", "mobile", "number", "call", "reach", "ph"])
+    
+    # Generate query embedding
+    query_vec = np.array(list(embed_model.embed([query]))).astype("float32")
+    sims = cosine_similarity(query_vec, corpus_embeddings)[0]
+    
+    # Apply metadata-based boosting for contact queries
+    if is_contact_query and corpus_metadata:
+        for i, meta in enumerate(corpus_metadata):
+            # Boost chunks that contain email/phone when user asks for contact info
+            if meta.get("contains_email") or meta.get("contains_phone"):
+                sims[i] *= 1.3  # 30% boost for chunks with contact info
+    
+    # Get top results
+    top_indices = np.argsort(-sims)[:top_k]
+
+    results = []
+    for i in top_indices:
+        results.append({
+            "text": corpus[i],
+            "similarity": float(sims[i])
+        })
+    return results
+
+# -----------------------------
+# Maintenance
+# -----------------------------
+def clear_index():
+    """Clear embeddings and index data."""
+    global corpus, corpus_metadata, corpus_embeddings
+    corpus, corpus_metadata, corpus_embeddings = [], [], None
+    try:
+        folder = "knowledge_base/index"
+        if os.path.exists(folder):
+            for f in os.listdir(folder):
+                os.remove(os.path.join(folder, f))
+        print("🧹 Cleared index.")
+    except Exception as e:
+        print(f"Error clearing index: {e}")
