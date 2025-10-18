@@ -151,29 +151,30 @@ function updateLocationDisplay() {
   map.setView([loc.lat, loc.lon], 17);
 }
 
+
+
+
 // Initialize Leaflet map with multiple base layers and return button
 function initMap() {
   if (!map) {
     const loc = locations[0];
 
     // Base Layers
-    
     const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution: '<a href="https://instagram.com/Xbr_Dr" target="_blank" rel="noopener noreferrer">@Xbr_Dr</a> |CampusGPT |© OSM'
+      attribution: '<a href="https://github.com/xbr-dr" target="_blank" rel="noopener noreferrer">@Xbr_Dr</a> |CampusGPT |© OSM'
     });
 
     const satellite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
       maxZoom: 20,
       subdomains:['mt0','mt1','mt2','mt3'],
-      attribution: '<a href="https://instagram.com/Xbr_Dr" target="_blank" rel="noopener noreferrer">@Xbr_Dr</a> | CampusGPT | © Google Satellite'
+      attribution: '<a href="https://github.com/xbr-dr" target="_blank" rel="noopener noreferrer">@Xbr_Dr</a> | CampusGPT | © Google Satellite'
     });
-
 
     const terrain = L.tileLayer('https://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
       maxZoom: 20,
       subdomains:['mt0','mt1','mt2','mt3'],
-      attribution: '<a href="https://instagram.com/Xbr_Dr" target="_blank" rel="noopener noreferrer">@Xbr_Dr</a> |CampusGPT |© Google Terrain'
+      attribution: '<a href="https://github.com/xbr-dr" target="_blank" rel="noopener noreferrer">@Xbr_Dr</a> |CampusGPT |© Google Terrain'
     });
 
     baseLayers = {
@@ -192,13 +193,82 @@ function initMap() {
     marker = L.marker([loc.lat, loc.lon]).addTo(map);
     marker.bindTooltip(loc.name, { permanent: true, direction: 'bottom', offset: [0, 10] }).openTooltip();
 
-    // Add layer control to map
+    // Add layer control
     L.control.layers(baseLayers).addTo(map);
 
-    // Add Return to Marker button as custom control
+    // ✅ Add polygon highlight (always visible on all base layers)
+    const polygonCoords = [
+      [34.07693442357666, 74.82044936125726],
+      [34.07739567744387, 74.82025441484842],
+      [34.077862498744, 74.82006175381733],
+      [34.07823227007494, 74.81993184977787],
+      [34.07833935054218, 74.81985718700484],
+      [34.0784198873923, 74.81978901008571],
+      [34.07844041731678, 74.81971440791216],
+      [34.07846728041613, 74.81966528612156],
+      [34.07848856416497, 74.81954204005631],
+      [34.07849894463364, 74.81940379824799],
+      [34.07848831310557, 74.8192353398189],
+      [34.07839400609397, 74.81889521575704],
+      [34.07833203447737, 74.81868891364097],
+      [34.0782333622525, 74.81841369152252],
+      [34.07802412754327, 74.8177008718597],
+      [34.07794531097755, 74.81729790848502],
+      [34.07797210239354, 74.81728665722136],
+      [34.07796616467036, 74.81701247254905],
+      [34.07797303410975, 74.81648778536184],
+      [34.07797085485774, 74.81577719245142],
+      [34.07773260798768, 74.81578228053797],
+      [34.07771210515227, 74.81567305021484],
+      [34.07760638300436, 74.81566231976721],
+      [34.07757131465885, 74.81532674421479],
+      [34.07752483117598, 74.81529446157427],
+      [34.07751095971062, 74.81503666633893],
+      [34.07746716974594, 74.81468314223619],
+      [34.07726723390656, 74.81465736662081],
+      [34.07696321366854, 74.8146059009765],
+      [34.07695557378288, 74.81453513184155],
+      [34.07698204000998, 74.81432025195704],
+      [34.0769557700089, 74.81429377986015],
+      [34.07699077182034, 74.81412555209538],
+      [34.07693481870585, 74.81398777890473],
+      [34.07680912610917, 74.81382770251069],
+      [34.07679861671019, 74.81388830114142],
+      [34.07669392977866, 74.81412436068537],
+      [34.07650202374226, 74.81454386505968],
+      [34.07643425925648, 74.81470453478387],
+      [34.07619935973942, 74.81484629059851],
+      [34.07604416941525, 74.81493576132162],
+      [34.07593374257048, 74.81499305817],
+      [34.07562548136259, 74.81515925619168],
+      [34.07558312423519, 74.81516789944726],
+      [34.07578958419349, 74.8159747202225],
+      [34.07588636751581, 74.81626401466656],
+      [34.07593408719796, 74.81647882659954],
+      [34.07603093562403, 74.81697902560883],
+      [34.07619332079385, 74.81761322515239],
+      [34.07629106692195, 74.81797268150821],
+      [34.07635832075992, 74.81821074047258],
+      [34.07647540498265, 74.81871042666258],
+      [34.07666590639117, 74.81951504566847],
+      [34.07683679574252, 74.82021019809561],
+      [34.07693442357666, 74.82044936125726]
+    ];
+
+    const highlightedArea = L.polygon(polygonCoords, {
+      color: 'red',
+      fillColor: '#c57d5aff',
+      fillOpacity: 0.3,
+      weight: 2
+    }).addTo(map);
+
+    highlightedArea.bindTooltip("Campus Area", { permanent: false });
+
+    // Add Return to Marker button
     addReturnToMarkerControl(loc.lat, loc.lon);
   }
 }
+
 
 // Custom Leaflet Control: Return to Marker Button
 function addReturnToMarkerControl(lat, lon) {
