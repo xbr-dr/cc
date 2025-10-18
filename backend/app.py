@@ -31,6 +31,12 @@ def home():
     return render_template("user/index.html")
 
 if __name__ == "__main__":
+    # Load locations from disk automatically
+    from admin_routes import load_locations_from_disk
+    load_locations_from_disk()
+
+
+
     # Load prebuilt index from disk if available, otherwise build from uploaded docs
     if os.path.exists("knowledge_base/index"):
         load_index()
