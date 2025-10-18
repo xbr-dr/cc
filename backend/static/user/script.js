@@ -1,3 +1,63 @@
+// Text formatting function - ADD THIS AT THE TOP
+function formatChatMessage(text) {
+    if (!text) return '';
+    
+    // Escape HTML to prevent XSS
+    text = text.replace(/&/g, '&amp;')
+               .replace(/</g, '&lt;')
+               .replace(/>/g, '&gt;');
+    
+    // Convert **bold** to <strong> (MUST come before single *)
+    text = text.replace(/\*\*([^\*]+?)\*\*/g, '<strong>$1</strong>');
+    
+    // Convert *italic* to <em> (single asterisks only)
+    text = text.replace(/(?<!\*)\*([^\*]+?)\*(?!\*)/g, '<em>$1</em>');
+    
+    // Convert bullet points (•, -, *, ‣)
+    text = text.replace(/^[\s]*[•\-\*‣]\s+(.+)$/gm, '<li>$1</li>');
+    
+    // Convert numbered lists
+    text = text.replace(/^[\s]*(\d+)\.\s+(.+)$/gm, '<li>$2</li>');
+    
+    // Wrap consecutive <li> in <ul>
+    text = text.replace(/(<li>.*?<\/li>\s*)+/gs, function(match) {
+        return '<ul>' + match + '</ul>';
+    });
+    
+    // Convert paragraphs (double newline)
+    let paragraphs = text.split(/\n\s*\n/);
+    paragraphs = paragraphs.map(para => {
+        para = para.replace(/\n/g, '<br>');
+        if (para.includes('<ul>') || para.includes('<ol>')) {
+            return para;
+        }
+        return '<p>' + para + '</p>';
+    });
+    text = paragraphs.join('');
+    
+    // Convert URLs to links
+    text = text.replace(
+        /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g,
+        '<a href="$&" target="_blank" rel="noopener noreferrer">$&</a>'
+    );
+    
+    // Convert emails to mailto links
+    text = text.replace(
+        /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/g,
+        '<a href="mailto:$1">$1</a>'
+    );
+    
+    // Convert phone numbers to tel links
+    text = text.replace(
+        /(\+?\d{1,3}[-.\s]?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{4})/g,
+        '<a href="tel:$1">$1</a>'
+    );
+    
+    return text;
+}
+
+
+
 // Tab switching
 const btnNavigate = document.getElementById("btnNavigate");
 const btnChat = document.getElementById("btnChat");
@@ -201,11 +261,17 @@ const chatHistory = [];
 function addMessage(text, sender) {
   const div = document.createElement("div");
   div.className = `message ${sender === "user" ? "userMsg" : "botMsg"}`;
-  div.textContent = text;
+  
+  // Format bot messages as HTML, keep user messages as text
+  if (sender === "bot") {
+    div.innerHTML = formatChatMessage(text);
+  } else {
+    div.textContent = text;
+  }
+  
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
 }
-
 // Show welcome message on load
 function addWelcomeMessage() {
   const welcome = "👋 Welcome to CampusGPT! Chat here or click 'Navigate' to explore the campus.";

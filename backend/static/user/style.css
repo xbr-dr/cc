@@ -151,3 +151,72 @@ select {
   background-color: #357ABD;
 }
 
+/* Formatted message content styles */
+.message p {
+  margin: 0 0 8px 0;
+}
+
+.message p:last-child {
+  margin-bottom: 0;
+}
+
+.message ul {
+  margin: 8px 0;
+  padding-left: 20px;
+  list-style-type: disc;
+}
+
+.message ol {
+  margin: 8px 0;
+  padding-left: 20px;
+  list-style-type: decimal;
+}
+
+.message li {
+  margin: 4px 0;
+  text-align: left;
+}
+
+.message strong {
+  font-weight: 600;
+}
+
+.message em {
+  font-style: italic;
+}
+
+/* Links in messages */
+.message a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.botMsg a {
+  color: #0066cc;
+}
+
+.botMsg a:hover {
+  color: #004499;
+}
+
+/* Special styling for contact links */
+.botMsg a[href^="mailto:"],
+.botMsg a[href^="tel:"] {
+  background-color: rgba(74, 144, 226, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.botMsg a[href^="mailto:"]:hover,
+.botMsg a[href^="tel:"]:hover {
+  background-color: rgba(74, 144, 226, 0.2);
+}
+
+/* Ensure line breaks work */
+.message br {
+  display: block;
+  content: "";
+  margin: 2px 0;
+}
