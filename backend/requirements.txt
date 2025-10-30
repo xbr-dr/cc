@@ -3,7 +3,7 @@ Flask-Cors
 Werkzeug
 numpy
 scikit-learn
-fastembed
+sentence_transformers
 requests
 huggingface_hub
 pymupdf
