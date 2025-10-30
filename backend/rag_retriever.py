@@ -4,7 +4,7 @@ import re
 import json
 import numpy as np
 import pandas as pd
-from fastembed import TextEmbedding
+from sentence_transformers import SentenceTransformer
 import fitz  # PyMuPDF for PDF parsing
 
 # -----------------------------
@@ -12,10 +12,7 @@ import fitz  # PyMuPDF for PDF parsing
 # -----------------------------
 HF_TOKEN = os.getenv("HF_TOKEN")  # Hugging Face auth (optional)
 
-if HF_TOKEN:
-    embed_model = TextEmbedding(model_name="sentence-transformers/LaBSE", use_auth_token=HF_TOKEN)
-else:
-    embed_model = TextEmbedding(model_name="sentence-transformers/LaBSE")
+embed_model = SentenceTransformer("sentence-transformer/LaBSE")
 
 corpus = []
 corpus_metadata = []
@@ -216,13 +213,9 @@ def load_documents_and_build_index(doc_folder="knowledge_base/docs"):
 
     corpus = [c["text"] for c in corpus_data]
     corpus_metadata = [c["meta"] for c in corpus_data]
-    embeddings = []
-    batch_size = 64
-    for i in range(0, len(corpus), batch_size):
-        batch = corpus[i:i+batch_size]
-        embeddings.extend(list(embed_model.embed(batch)))
-
-    corpus_embeddings = np.array(embeddings).astype("float32")
+   
+    corpus_embeddings = embed_model.encode(corpus, convert_to_numpy=True, show_progress_bar=True)
+    corpus_embeddings = corpus_embeddings.astype("float32")
 
     os.makedirs("knowledge_base/index", exist_ok=True)
     np.save("knowledge_base/index/corpus_embeddings.npy", corpus_embeddings)
@@ -272,7 +265,7 @@ def retrieve_relevant_chunks(query, top_k=5):
                           ["email", "contact", "phone", "mobile", "number", "call", "reach", "ph"])
     
     # Generate query embedding
-    query_vec = np.array(list(embed_model.embed([query]))).astype("float32")
+    query_vec = embed_model.encode([query]).astype("float32")
     sims = cosine_similarity(query_vec, corpus_embeddings)[0]
     
     # Apply metadata-based boosting for contact queries
