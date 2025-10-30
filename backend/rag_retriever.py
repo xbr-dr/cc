@@ -13,9 +13,9 @@ import fitz  # PyMuPDF for PDF parsing
 HF_TOKEN = os.getenv("HF_TOKEN")  # Hugging Face auth (optional)
 
 if HF_TOKEN:
-    embed_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2", use_auth_token=HF_TOKEN)
+    embed_model = TextEmbedding(model_name="sentence-transformers/LaBSE", use_auth_token=HF_TOKEN)
 else:
-    embed_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    embed_model = TextEmbedding(model_name="sentence-transformers/LaBSE")
 
 corpus = []
 corpus_metadata = []
